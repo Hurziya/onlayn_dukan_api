@@ -1,2 +1,2 @@
-git clone <repository-url>
-cd onlayn_dukan_api
+git clone <https://github.com/Hurziya/onlayn_dukan_api.git>
+cd onlayn_dukan_apigit
