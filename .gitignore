@@ -1,0 +1,25 @@
+# Django-specific ignores
+*.log
+*.pot
+*.pyc
+__pycache__/
+db.sqlite3
+media/
+
+# IDE-specific ignores
+.idea/
+.vscode/
+
+# OS-specific ignores
+.DS_Store
+Thumbs.db
+
+# Virtual environment
+venv/
+.venv/
+env/
+
+# dotenv files
+.env
+
+staticfiles/

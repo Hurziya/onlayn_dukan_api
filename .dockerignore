@@ -1,0 +1,21 @@
+.venv/
+.git/
+__pycache__/
+*.pyc
+db.sqlite3
+
+# IDE-specific ignores
+.idea/
+.vscode/
+
+# OS-specific ignores
+.DS_Store
+Thumbs.db
+
+# Virtual environment
+venv/
+.venv/
+env/
+
+# dotenv files
+.env    
