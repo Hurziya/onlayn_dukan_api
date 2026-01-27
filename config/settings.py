@@ -151,11 +151,9 @@ REST_FRAMEWORK = {
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
-
-
 SPECTACULAR_SETTINGS = {
-    'TITLE': 'Meniń Internet-Magazin API',
-    'DESCRIPTION': 'Project ushın API hújjetlemesi',
+    'TITLE': 'Onlayn dúkan api',
+    'DESCRIPTION': 'Proekt ushın API hújjetlemesi',
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
 }

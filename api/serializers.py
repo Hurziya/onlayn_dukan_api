@@ -13,7 +13,7 @@ class UserSerializer(serializers.ModelSerializer):
             'password': {'write_only': True},
             'role': {'read_only': True}
         }
-
+ 
     def create(self, validated_data):
         password = validated_data.pop('password')
         user = User.objects.create_user(password=password, **validated_data)
@@ -136,3 +136,4 @@ class ReviewSerializer(serializers.ModelSerializer):
     class Meta:
         model = Review
         fields = ['id', 'user_name', 'rating', 'comment', 'created_at']
+        # comment avtomat túrde optional (májburiy emes) boladı

@@ -74,17 +74,30 @@ class UserViewSet(viewsets.ModelViewSet):
 class CategoryViewSet(viewsets.ModelViewSet):
     """
     Kategoriyalardı basqarıw. Kategoriyalar hámmege ashıq, 
-    biraq tek Adminler kosa yamasa ózgerte aladı.
+    biraq tek Adminler Qosa yamasa ózgerte aladı.
     """
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
     filter_backends = [filters.SearchFilter]
     search_fields = ['name']
 
+    def get_queryset(self):
+        queryset = Category.objects.all()
+        
+        parent_id = self.request.query_params.get('parent')
+        if parent_id:
+            if parent_id == 'null':
+                return queryset.filter(parent__isnull=True)
+            return queryset.filter(parent_id=parent_id)
+        else:
+            return queryset.filter(parent__isnull=True)
+
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
             return [permissions.AllowAny()]
         return [permissions.IsAdminUser()]
+   
+
 
     @action(detail=True, methods=['get'])
     def products(self, request, pk=None):
@@ -108,7 +121,7 @@ class CategoryViewSet(viewsets.ModelViewSet):
 class ProductViewSet(viewsets.ModelViewSet):
     """
     Ónimler dizimin kórsetiw, izlew hám bahası boyınsha filtrlew ushın.
-    'price__gte' hám 'price__lte' arqalı bahalar aralıǵın filtrlew múmkin.
+    
     """
     queryset = Product.objects.filter(is_active=True).order_by('id')
     serializer_class = ProductSerializer
@@ -223,24 +236,26 @@ class OrderViewSet(viewsets.ModelViewSet):
         with transaction.atomic():
             total_sum = 0
             order = Order.objects.create(user=request.user, total_price=0, address=address)
-            
-            for item in user_card.items.all():
-                if item.product.stock < item.quantity:
-                    raise serializers.ValidationError(f"{item.product.name} qoymada jetkilikli emes")
 
-                price = item.product.discount_price or item.product.price
+            for item in user_card.items.all():
+                product = Product.objects.select_for_update().get(id=item.product.id)
+
+                if product.stock < item.quantity:
+                    raise serializers.ValidationError(f"{product.name} qoymada jetkilikli emes")
+
+                price = product.discount_price or product.price
                 OrderItem.objects.create(
-                    order=order, product=item.product, 
+                    order=order, product=product, 
                     quantity=item.quantity, price=price
                 )
                 
                 total_sum += price * item.quantity
-                item.product.stock -= item.quantity
-                item.product.save()
+                product.stock -= item.quantity
+                product.save()
 
             order.total_price = total_sum
             order.save()
-            user_card.items.all().delete() 
+            user_card.items.all().delete()
 
         return Response(OrderSerializer(order).data, status=status.HTTP_201_CREATED)
 
@@ -248,3 +263,4 @@ class OrderViewSet(viewsets.ModelViewSet):
         """Standart create metodı jawılǵan, buyırtpa ushın checkout isletiliwi kerek."""
         return Response({"error": "Buyırtpa ushın /checkout/ isletin"}, 
                         status=status.HTTP_405_METHOD_NOT_ALLOWED)
+   

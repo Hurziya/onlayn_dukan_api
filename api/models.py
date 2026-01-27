@@ -1,6 +1,9 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 
+from django.core.validators import MinValueValidator, MaxValueValidator
+from django.core.exceptions import ValidationError
+
 class UserManager(BaseUserManager):
     """
     User modeli ushın arnawlı manager. 
@@ -17,7 +20,7 @@ class UserManager(BaseUserManager):
     def create_superuser(self, phone_number, password=None, **extra_fields): 
         extra_fields.setdefault('is_staff', True)  
         extra_fields.setdefault('is_superuser', True)
-
+    
         if extra_fields.get('is_staff') is not True:
             raise ValueError('Superuser must have is_staff=True.')
         if extra_fields.get('is_superuser') is not True:
@@ -29,7 +32,7 @@ class UserManager(BaseUserManager):
 class User(AbstractUser):
     """
     Sistemada dizimnen ótiw hám login qılıw ushın qollanılatın tiykarǵı paydalanıwshı modeli.
-    Standart 'username' ornına 'phone_number' qollanıladı.
+    Standart 'username' ornına 'phone_number' qollanıldı.
     """
     username = None       
     class Role(models.TextChoices): 
@@ -65,11 +68,11 @@ class Category(models.Model):
 class Product(models.Model):
     """
     Satılatın ónimler tuwralı maǵlıwmatlardı saqlawshı model.
-    Baha, shegirme, qaldıq hám status maǵlıwmatların óz ishine aladı.
+    Baha, shegirme, hám ónimler sanı maǵlıwmatların óz ishine aladı.
     """
     category = models.ForeignKey(Category, on_delete=models.CASCADE)
     name = models.CharField(max_length=100)
-    slug = models.SlugField(unique=True)
+    slug = models.SlugField(unique=True) # save degen metodi bar soni override qilip jibersek boladi, 
     description = models.TextField()
     price = models.DecimalField(max_digits=10, decimal_places=2)
     discount_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
@@ -94,6 +97,7 @@ class Card(models.Model):
         return f"Card for {self.user.phone_number}"
 
 
+
 class CardItem(models.Model): 
     """
     Sebet ishindegi konkret ónimler hám olardıń sanı.
@@ -101,10 +105,11 @@ class CardItem(models.Model):
     """
     card = models.ForeignKey(Card, on_delete=models.CASCADE, related_name='items')
     product = models.ForeignKey(Product, on_delete=models.CASCADE) 
-    quantity = models.PositiveIntegerField()
-
+    quantity = models.PositiveIntegerField()  
     def __str__(self):
         return f"{self.product.name} (x{self.quantity})"
+
+
 
 
 class Order(models.Model):
@@ -128,6 +133,8 @@ class Order(models.Model):
         return f"Order {self.id} by {self.user.phone_number}"
 
 
+
+
 class OrderItem(models.Model):
     """
     Buyırtpa ishindegi elementlerdiń 'tariyxıy' kóshirmesi.
@@ -147,12 +154,19 @@ class OrderItem(models.Model):
 class Review(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='reviews')
     user = models.ForeignKey(User, on_delete=models.CASCADE)
-    rating = models.PositiveIntegerField(default=5) # 1-5 aralıǵında
-    comment = models.TextField()
+    
+    # Rating májburiy (default boyınsha), 1 den 5 ke shekem dep sheklep qoyǵan jaqsı
+    rating = models.PositiveIntegerField(
+        validators=[MinValueValidator(1), MaxValueValidator(5)]
+    )
+    
+    # Kommentariy májburiy emes (null=True, blank=True)
+    comment = models.TextField(null=True, blank=True)
+    
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        unique_together = ('product', 'user') # Bir user bir ónimge tek bir ret pikir qaldıra aladı
+        unique_together = ('product', 'user')
 
     def __str__(self):
         return f"{self.user.phone_number} - {self.product.name} ({self.rating})"

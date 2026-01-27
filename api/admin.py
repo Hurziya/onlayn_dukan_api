@@ -52,8 +52,6 @@ class ProductAdmin(admin.ModelAdmin):
         from django.db.models import Avg
         result = obj.reviews.aggregate(Avg('rating'))['rating__avg']
         return round(result, 1) if result else "Pikir joq"
-    get_avg_rating.short_description = "Reyting"
-
 
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
