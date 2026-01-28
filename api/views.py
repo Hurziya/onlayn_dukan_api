@@ -76,21 +76,24 @@ class CategoryViewSet(viewsets.ModelViewSet):
     Kategoriyalardı basqarıw. Kategoriyalar hámmege ashıq, 
     biraq tek Adminler Qosa yamasa ózgerte aladı.
     """
+    
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
     filter_backends = [filters.SearchFilter]
     search_fields = ['name']
 
     def get_queryset(self):
-        queryset = Category.objects.all()
+        # Klasstıń tiykarǵı queryset'in alıw
+        queryset = super().get_queryset()
         
         parent_id = self.request.query_params.get('parent')
+        
         if parent_id:
             if parent_id == 'null':
                 return queryset.filter(parent__isnull=True)
             return queryset.filter(parent_id=parent_id)
-        else:
-            return queryset.filter(parent__isnull=True)
+        
+        return queryset.filter(parent__isnull=True)
 
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
