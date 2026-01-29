@@ -38,7 +38,7 @@ class ECommerceTests(APITestCase):
             is_active=True
         )
         
-        # Avtentifikaciya (Login)
+        # Autentifikaciya (Login)
         self.client.force_authenticate(user=self.user)
 
     # --- USER TESTS ---
