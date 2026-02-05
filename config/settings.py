@@ -39,12 +39,14 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'api',
     'rest_framework',
     'rest_framework_simplejwt',
     'django_filters',
     'drf_spectacular',
     'rest_framework_simplejwt.token_blacklist',
+    'shop',
+    'users',
+    'bot',
 ]
 
 MIDDLEWARE = [
@@ -61,6 +63,7 @@ MIDDLEWARE = [
 
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
+AUTH_USER_MODEL = 'users.User'
 
 ROOT_URLCONF = 'config.urls'
 
@@ -134,7 +137,7 @@ USE_TZ = True
 STATIC_URL = 'static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
-AUTH_USER_MODEL = 'api.User'
+
 
 
 REST_FRAMEWORK = {
@@ -165,3 +168,29 @@ SIMPLE_JWT = {
     'BLACKLIST_AFTER_ROTATION': True,
     
 }
+
+
+
+from datetime import timedelta
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(days=1),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'ROTATE_REFRESH_TOKENS': False,
+    'BLACKLIST_AFTER_ROTATION': True,
+}
+
+
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'unique-snowflake',
+    }
+}
+
+
+
+TELEGRAM_BOT_TOKEN = config('TELEGRAM_BOT_TOKEN')
+TELEGRAM_WEBHOOK_URL = config('TELEGRAM_WEBHOOK_URL')
+
+
+CSRF_TRUSTED_ORIGINS = [config('TELEGRAM_WEBHOOK_URL').replace('/bot/webhook/', '')]

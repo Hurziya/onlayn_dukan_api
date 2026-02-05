@@ -1,13 +1,14 @@
+
 from django.db import transaction
-from rest_framework import viewsets, status, filters, permissions
+from rest_framework import viewsets, status, filters, permissions, serializers
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework_simplejwt.tokens import RefreshToken
 
-from .models import Category, Product, Card, CardItem, Order, OrderItem, User
-from .serializers import *
+from .models import Category, Product, Card, CardItem, Order, OrderItem
+from .serializers import (CardSerializer, ProductSerializer, OrderSerializer, ReviewSerializer, CategorySerializer)
+  
 
 # 1. PAGINATION
 class StandardResultsSetPagination(PageNumberPagination):
@@ -20,66 +21,16 @@ class StandardResultsSetPagination(PageNumberPagination):
     max_page_size = 100
 
 
-# 2. USER VIEWSET
-class UserViewSet(viewsets.ModelViewSet):
-    """
-    Paydalanıwshılardı dizimnen ótkeriw, profilin kórsetiw, jańalaw hám 
-    sistemadan shıǵarıw (logout) processlerin basqarıw ushın ViewSet.
-    """
-    queryset = User.objects.all()
-    serializer_class = UserSerializer
-
-    def get_permissions(self):
-        """Action túrine qaray ruxsatlardı belgileydi."""
-        if self.action == 'create':
-            return [permissions.AllowAny()]
-        if self.action == 'list':
-            return [permissions.IsAdminUser()]
-        return [permissions.IsAuthenticated()]
-
-    @action(detail=False, methods=['get', 'put', 'patch'], url_path='me')
-    def manage_profile(self, request):
-        """
-        Paydalanıwshı óz profilin kóriwi hám ózgertiwi ushın (/users/me/).
-        ID kiritiliwi shárt emes, request.user-den avtomat alınadı.
-        """
-        user = request.user
-        if request.method == 'GET':
-            serializer = self.get_serializer(user)
-            return Response(serializer.data)
-        
-        serializer = self.get_serializer(user, data=request.data, partial=True)
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-        return Response(serializer.data)
-    
-    @action(detail=False, methods=['post'], permission_classes=[permissions.IsAuthenticated])
-    def logout(self, request):
-        """
-        Refresh tokendi blacklistke qosıw arqılı paydalanıwshını sistemadan shıǵarıw.
-        """
-        try:
-            refresh_token = request.data.get("refresh")
-            if not refresh_token:
-                return Response({"error": "Refresh token kiritilmegen"}, status=status.HTTP_400_BAD_REQUEST)
-            
-            token = RefreshToken(refresh_token)
-            token.blacklist() 
-            return Response({"message": "Siz sistemadan tabıslı shıqtıńız"}, status=status.HTTP_205_RESET_CONTENT)
-        except Exception:
-            return Response({"error": "Token nadurıs yamasa aldın biykar etilgen"}, status=status.HTTP_400_BAD_REQUEST)
-
-
-# 3. CATEGORY VIEWSET
 class CategoryViewSet(viewsets.ModelViewSet):
     """
     Kategoriyalardı basqarıw. Kategoriyalar hámmege ashıq, 
     biraq tek Adminler Qosa yamasa ózgerte aladı.
     """
     
-    queryset = Category.objects.all()
+    queryset = Category.objects.all().order_by('id') 
     serializer_class = CategorySerializer
     filter_backends = [filters.SearchFilter]
+    pagination_class = None
     search_fields = ['name']
 
     def get_queryset(self):
@@ -124,7 +75,6 @@ class CategoryViewSet(viewsets.ModelViewSet):
 class ProductViewSet(viewsets.ModelViewSet):
     """
     Ónimler dizimin kórsetiw, izlew hám bahası boyınsha filtrlew ushın.
-    
     """
     queryset = Product.objects.filter(is_active=True).order_by('id')
     serializer_class = ProductSerializer
@@ -141,9 +91,11 @@ class ProductViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
             return [permissions.AllowAny()]
+        if self.action == 'add_review': # Usı qatardı qosıń
+            return [permissions.IsAuthenticated()]
         return [permissions.IsAdminUser()]
     
-
+    # reviewge tek avtor huqiqlarin qoyiw tek avtor isley aladi
     # pikir qaldiriw ushin qosimsha endopoind
     @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated])
     def add_review(self, request, pk=None):
@@ -192,7 +144,7 @@ class CardViewSet(viewsets.ModelViewSet):
         if not created:
             item.quantity += quantity
             item.save()
-
+            
         return Response({"message": "Tovar sebetke qosıldı"}, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['delete'], url_path='remove')
@@ -206,7 +158,6 @@ class CardViewSet(viewsets.ModelViewSet):
             return Response({"message": "Ónim sebetten óshirildi"}, status=status.HTTP_204_NO_CONTENT)
         except CardItem.DoesNotExist:
             return Response({"error": "Bunday element sebetińizde tabılmadı"}, status=status.HTTP_404_NOT_FOUND)
-
 
 # 6. ORDER VIEWSET
 class OrderViewSet(viewsets.ModelViewSet):
@@ -266,4 +217,4 @@ class OrderViewSet(viewsets.ModelViewSet):
         """Standart create metodı jawılǵan, buyırtpa ushın checkout isletiliwi kerek."""
         return Response({"error": "Buyırtpa ushın /checkout/ isletin"}, 
                         status=status.HTTP_405_METHOD_NOT_ALLOWED)
-   
+    
