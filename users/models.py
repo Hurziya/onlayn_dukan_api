@@ -1,8 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 
-
-
 class UserManager(BaseUserManager):
     """
     User modeli ushın arnawlı manager. 
@@ -43,9 +41,10 @@ class User(AbstractUser):
     address = models.TextField(blank=True, null=True)
 
     telegram_id = models.BigIntegerField(unique=True, null=True, blank=True)
-    
+    email = models.EmailField(unique=True) 
+
     USERNAME_FIELD = 'phone_number' 
-    REQUIRED_FIELDS = ['first_name', 'last_name']  
+    REQUIRED_FIELDS = ['email', 'first_name', 'last_name']
 
     objects = UserManager() 
 
