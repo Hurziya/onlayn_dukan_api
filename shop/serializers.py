@@ -32,6 +32,12 @@ class ProductSerializer(serializers.ModelSerializer):
     category_name = serializers.ReadOnlyField(source='category.name')
     final_price = serializers.SerializerMethodField()
 
+
+    def validate(self, data):
+        if data.get('discount_price') and data.get('discount_price') >= data.get('price'):
+            raise serializers.ValidationError("Shegirme bahası tiykarǵı bahadan kishi bolıwı kerek")
+        return data
+
     class Meta:
         model = Product
         fields = [

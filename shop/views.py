@@ -1,14 +1,28 @@
-
 from django.db import transaction
 from rest_framework import viewsets, status, filters, permissions, serializers
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
 from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework import mixins, viewsets
 
-from .models import Category, Product, Card, CardItem, Order, OrderItem
+from .models import Category, Product, Card, CardItem, Order, OrderItem, Review
 from .serializers import (CardSerializer, ProductSerializer, OrderSerializer, ReviewSerializer, CategorySerializer)
   
+
+
+class IsAuthorOrReadOnly(permissions.BasePermission):
+    """
+    Tek avtorǵa ózgeris kirgiziwge ruxsat beriw. 
+    Basqalar tek kóre aladı (Read Only).
+    """
+    def has_object_permission(self, request, view, obj):
+        # GET, HEAD, OPTIONS sorawlarına barlıqqa ruxsat
+        if request.method in permissions.SAFE_METHODS:
+            return True
+        # Ózgertiw (PUT, PATCH, DELETE) tek avtor ushın
+        return obj.user == request.user
+    
 
 # 1. PAGINATION
 class StandardResultsSetPagination(PageNumberPagination):
@@ -21,12 +35,14 @@ class StandardResultsSetPagination(PageNumberPagination):
     max_page_size = 100
 
 
-class CategoryViewSet(viewsets.ModelViewSet):
+
+class CategoryViewSet(mixins.ListModelMixin,      # Tek GET /categories/ (Dizim)
+                      mixins.CreateModelMixin,    # Tek POST /categories/ (Qosıw)
+                      viewsets.GenericViewSet):   # Tiykarǵı klass
     """
-    Kategoriyalardı basqarıw. Kategoriyalar hámmege ashıq, 
-    biraq tek Adminler Qosa yamasa ózgerte aladı.
+    Kategoriyalarda ID boyınsha hesh qanday metod joq.
+    Swagger-de tek GET (list) hám POST (create) qaladı.
     """
-    
     queryset = Category.objects.all().order_by('id') 
     serializer_class = CategorySerializer
     filter_backends = [filters.SearchFilter]
@@ -34,9 +50,8 @@ class CategoryViewSet(viewsets.ModelViewSet):
     search_fields = ['name']
 
     def get_queryset(self):
-        # Klasstıń tiykarǵı queryset'in alıw
-        queryset = super().get_queryset()
-        
+        # Filtrlew logikası ózgermeydi
+        queryset = Category.objects.all().order_by('id')
         parent_id = self.request.query_params.get('parent')
         
         if parent_id:
@@ -47,28 +62,10 @@ class CategoryViewSet(viewsets.ModelViewSet):
         return queryset.filter(parent__isnull=True)
 
     def get_permissions(self):
-        if self.action in ['list', 'retrieve']:
+        # Tek eki action qaldı: list hám create
+        if self.action == 'list':
             return [permissions.AllowAny()]
         return [permissions.IsAdminUser()]
-   
-
-
-    @action(detail=True, methods=['get'])
-    def products(self, request, pk=None):
-        """
-        Anıq bir kategoriyaǵa tiyisli barlıq aktiv ónimler dizimin qaytaradı.
-        """
-        category = self.get_object()
-        products = Product.objects.filter(category=category, is_active=True)
-        
-        paginator = StandardResultsSetPagination()
-        page = paginator.paginate_queryset(products, request)
-        if page is not None:
-            serializer = ProductSerializer(page, many=True)
-            return paginator.get_paginated_response(serializer.data)
-    
-        serializer = ProductSerializer(products, many=True)
-        return Response(serializer.data)
 
 
 # 4. PRODUCT VIEWSET
@@ -95,13 +92,13 @@ class ProductViewSet(viewsets.ModelViewSet):
             return [permissions.IsAuthenticated()]
         return [permissions.IsAdminUser()]
     
-    # reviewge tek avtor huqiqlarin qoyiw tek avtor isley aladi
-    # pikir qaldiriw ushin qosimsha endopoind
     @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated])
     def add_review(self, request, pk=None):
         product = self.get_object()
+        # Bir paydalanıwshı bir ónimge tek bir márte pikir qaldıra alatuǵın qılıw (itimal talap)
         serializer = ReviewSerializer(data=request.data)
         if serializer.is_valid():
+            # user=request.user — bul jerde avtor tayınlanadı
             serializer.save(user=request.user, product=product)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -134,17 +131,15 @@ class CardViewSet(viewsets.ModelViewSet):
         except Product.DoesNotExist:
             return Response({"error": "Ónim tabılmadı"}, status=status.HTTP_404_NOT_FOUND)
 
-        if product.stock < quantity:
-            return Response({"error": f"Qoymada jetkilikli ónim joq. Barı: {product.stock}"}, 
-                            status=status.HTTP_400_BAD_REQUEST)
-
         user_card, _ = Card.objects.get_or_create(user=request.user)
-        item, created = CardItem.objects.get_or_create(card=user_card, product=product, 
-                                                       defaults={'quantity': quantity})
-        if not created:
-            item.quantity += quantity
-            item.save()
-            
+        item, created = CardItem.objects.get_or_create(card=user_card, product=product, defaults={'quantity': 0})
+
+        if product.stock < (item.quantity + quantity):
+            return Response({"error": f"Qoymada jetkilikli ónim joq. Barı: {product.stock}"}, status=400)
+
+        item.quantity += quantity
+        item.save()
+                    
         return Response({"message": "Tovar sebetke qosıldı"}, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['delete'], url_path='remove')
@@ -218,3 +213,12 @@ class OrderViewSet(viewsets.ModelViewSet):
         return Response({"error": "Buyırtpa ushın /checkout/ isletin"}, 
                         status=status.HTTP_405_METHOD_NOT_ALLOWED)
     
+
+
+class ReviewViewSet(viewsets.ModelViewSet):
+    queryset = Review.objects.all()
+    serializer_class = ReviewSerializer
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly, IsAuthorOrReadOnly]
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)

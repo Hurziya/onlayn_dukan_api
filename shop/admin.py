@@ -1,6 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from .models import Category, Product, Order, OrderItem, Card, CardItem, Review
+from django.db.models import Avg
 
 @admin.register(Category)
 class CategoryAdmin(admin.ModelAdmin):  
@@ -27,7 +28,6 @@ class ProductAdmin(admin.ModelAdmin):
     prepopulated_fields = {'slug': ('name',)}
 
     def get_avg_rating(self, obj):
-        from django.db.models import Avg
         result = obj.reviews.aggregate(Avg('rating'))['rating__avg']
         return round(result, 1) if result else "Pikir joq"
 

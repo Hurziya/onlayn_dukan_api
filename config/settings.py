@@ -13,18 +13,22 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 from pathlib import Path
 import os
 from decouple import config
+from datetime import timedelta
 
 
 
-from decouple import config, Csv
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-
+ALLOWED_HOSTS = [
+    '.ngrok-free.dev', 
+    '.ngrok-free.app', 
+    '127.0.0.1', 
+    'localhost'
+]
 
 SECRET_KEY = config('SECRET_KEY')
 DEBUG = config('DEBUG', default=False, cast=bool)
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', cast=Csv())
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
@@ -161,17 +165,6 @@ SPECTACULAR_SETTINGS = {
     'SERVE_INCLUDE_SCHEMA': False,
 }
 
-
-
-SIMPLE_JWT = {
-    'ROTATE_REFRESH_TOKENS': True,
-    'BLACKLIST_AFTER_ROTATION': True,
-    
-}
-
-
-
-from datetime import timedelta
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(days=1),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
@@ -187,10 +180,24 @@ CACHES = {
     }
 }
 
-
-
 TELEGRAM_BOT_TOKEN = config('TELEGRAM_BOT_TOKEN')
 TELEGRAM_WEBHOOK_URL = config('TELEGRAM_WEBHOOK_URL')
+TELEGRAM_SECRET_TOKEN = config('TELEGRAM_SECRET_TOKEN', default=None)
+
+# Bot views hám apps islep ketiwi ushın aliaslar (qosımsha atamalar)
+TG_TOKEN = TELEGRAM_BOT_TOKEN
+TG_SECRET = TELEGRAM_SECRET_TOKEN
+
+CSRF_TRUSTED_ORIGINS = [
+    'https://*.ngrok-free.dev',
+    'https://*.ngrok-free.app', 
+]
 
 
-CSRF_TRUSTED_ORIGINS = [config('TELEGRAM_WEBHOOK_URL').replace('/bot/webhook/', '')]
+
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'sandbox.smtp.mailtrap.io'
+EMAIL_PORT = 2525
+EMAIL_HOST_USER = config('EMAIL_USER')
+EMAIL_HOST_PASSWORD = config('EMAIL_PASS')
+EMAIL_USE_TLS = True

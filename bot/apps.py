@@ -13,19 +13,19 @@ class BotConfig(AppConfig):
         import requests
         from django.conf import settings
         
-        token = getattr(settings, 'TELEGRAM_BOT_TOKEN', None)
-        webhook_url = getattr(settings, 'TELEGRAM_WEBHOOK_URL', None)
+        token = settings.TELEGRAM_BOT_TOKEN
+        webhook_url = settings.TELEGRAM_WEBHOOK_URL
         
         if not token or not webhook_url:
-            print("Eskertiw: TELEGRAM_BOT_TOKEN yamasa TELEGRAM_WEBHOOK_URL settings.py-da tabılmadı. Webhook ornatılmadı.")
+            print("Telegram token or Webhook URL not found in settings. Webhook not set.")
             return
 
         url = f"https://api.telegram.org/bot{token}/setWebhook"
         try:
             response = requests.post(url, json={"url": webhook_url})
             if response.status_code == 200:
-                print(f"Telegram Webhook tabıslı ornatıldı: {webhook_url}")
+                print(f"Telegram Webhook successfully set to: {webhook_url}")
             else:
-                print(f"Telegram Webhook ornatıp bolmadı: {response.text}")
+                print(f"Failed to set Telegram Webhook: {response.text}")
         except Exception as e:
-            print(f"Telegram Webhook sazlawı qáte: {e}")
+            print(f"Error setting Telegram Webhook: {e}")
