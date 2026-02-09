@@ -8,7 +8,7 @@ class UserManager(BaseUserManager):
         if email:
             email = self.normalize_email(email)
         else:
-            email = None # Jasalma email jaratıwdı alıp tasladıq
+            email = None 
             
         user = self.model(phone_number=phone_number, email=email, **extra_fields)
         user.set_password(password)
@@ -25,7 +25,7 @@ class User(AbstractUser):
     class Role(models.TextChoices):
         ADMIN = 'ADMIN', 'Admin'
         KLIENT = 'KLIENT', 'Klient'
-
+    
     username = None
     role = models.CharField(max_length=10, choices=Role.choices, default=Role.KLIENT)
     phone_number = models.CharField(max_length=15, unique=True)
@@ -35,4 +35,5 @@ class User(AbstractUser):
 
     USERNAME_FIELD = 'phone_number'
     REQUIRED_FIELDS = ['email', 'first_name', 'last_name']
+    
     objects = UserManager()

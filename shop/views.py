@@ -62,7 +62,7 @@ class CategoryViewSet(mixins.ListModelMixin,      # Tek GET /categories/ (Dizim)
         return queryset.filter(parent__isnull=True)
 
     def get_permissions(self):
-        # Tek eki action qaldı: list hám create
+        # Tek eki action list hám create
         if self.action == 'list':
             return [permissions.AllowAny()]
         return [permissions.IsAdminUser()]
@@ -88,7 +88,7 @@ class ProductViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
             return [permissions.AllowAny()]
-        if self.action == 'add_review': # Usı qatardı qosıń
+        if self.action == 'add_review':
             return [permissions.IsAuthenticated()]
         return [permissions.IsAdminUser()]
     

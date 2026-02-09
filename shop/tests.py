@@ -8,7 +8,6 @@ User = get_user_model()
 
 class ECommerceTests(APITestCase):
     def setUp(self):
-        # User jaratqanda email qosıń, sebebi Custom User modelińiz onı talap etedi
         self.user = User.objects.create_user(
             phone_number='+998901234567',
             email='test@example.com',

@@ -19,7 +19,7 @@ class ReviewAdmin(admin.ModelAdmin):
     list_filter = ('rating', 'created_at')
     search_fields = ('product__name', 'user__phone_number')
 
-# ProductAdmin di jańalaw
+
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
     list_display = ('name', 'category', 'price', 'stock', 'is_active', 'get_avg_rating')

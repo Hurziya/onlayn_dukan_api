@@ -39,15 +39,15 @@ class TelegramWebhookView(APIView):
         message = update["message"]
         chat_id = message["chat"]["id"]
 
-        # 2. /start komandası kelse - Kontakt soraw túyresin jiberiw
+        # 2. /start komandası kelse - Kontakt soraw túymesin jiberiw
         if "text" in message and message["text"] == "/start":
             self.send_contact_button(chat_id)
         
         # 3. Kontakt (telefon nomer) kelse - Kod generaciya qılıw
         elif "contact" in message:
             contact = message["contact"]
-            # Telefon nomerdi formatlaw (+ belgisin alıp taslaw)
-            phone_number = str(contact["phone_number"]).replace('+', '')
+            # Telefon nomerdi formatlaw 
+            phone_number = str(contact["phone_number"])
 
             # 6 sanlı unikal kod
             code = "{:06d}".format(random.randint(0, 999999))
