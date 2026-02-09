@@ -2,12 +2,13 @@ from django.db import transaction
 from rest_framework import viewsets, status, filters, permissions, serializers
 from rest_framework.response import Response
 from rest_framework.decorators import action
+from drf_spectacular.utils import extend_schema
 from rest_framework.pagination import PageNumberPagination
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import mixins, viewsets
 
 from .models import Category, Product, Card, CardItem, Order, OrderItem, Review
-from .serializers import (CardSerializer, ProductSerializer, OrderSerializer, ReviewSerializer, CategorySerializer)
+from .serializers import (CardSerializer, ProductSerializer, OrderSerializer, ReviewSerializer, CategorySerializer, AddToCardSerializer, CheckoutSerializer)
   
 
 
@@ -117,14 +118,18 @@ class CardViewSet(viewsets.ModelViewSet):
         """Tek login bolǵan paydalanıwshınıń óz sebetin qaytaradı."""
         return Card.objects.filter(user=self.request.user)
 
+    @extend_schema(
+        request=AddToCardSerializer, 
+        responses={201: None},
+        description="Ónimniń ID-si hám sanı arqılı sebetke element qosıw."
+    )
     @action(detail=False, methods=['post'], url_path='add')
     def add_to_card(self, request):
-        """
-        Ónimniń ID-si hám sanı arqılı sebetke element qosıw.
-        Ónimniń stock (qoymadaǵı sanı) jetkilikliligi tekseriledi.
-        """
-        product_id = request.data.get('product_id')
-        quantity = int(request.data.get('quantity', 1))
+        serializer = AddToCardSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        product_id = serializer.validated_data['product_id']
+        quantity = serializer.validated_data['quantity']
         
         try:
             product = Product.objects.get(id=product_id, is_active=True)
@@ -157,63 +162,94 @@ class CardViewSet(viewsets.ModelViewSet):
 # 6. ORDER VIEWSET
 class OrderViewSet(viewsets.ModelViewSet):
     """
-    Buyırtpalar tariyxın kóriw hám sebetten buyırtpa jaratıw (checkout).
-    Checkout waqtında stock kemeytiledi hám sebet tazalanadı.
+    Buyırtpalardı basqarıw viewseti.
+    Checkout arqalı sebetińizdi buyırtpaǵa aylandıra alasız.
     """
     serializer_class = OrderSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        """Paydalanıwshı tek ózi bergen buyırtpalar dizimin kóre aladı."""
         return Order.objects.filter(user=self.request.user).order_by('-created_at')
-    
+
+    def perform_create(self, serializer):
+        # Tiykarǵı POST /orders/ metodın japsańız boladı yamasa userdi avtomat qosıń
+        serializer.save(user=self.request.user)
+
+    @extend_schema(
+        request=CheckoutSerializer,
+        responses={201: OrderSerializer},
+        description="Sebettegi tovarlardı buyırtpa retinde rásmiylestiriw (Checkout)."
+    )
     @action(detail=False, methods=['post'], url_path='checkout')
     def checkout(self, request):
-        """
-        Sebettegi ónimlerdi buyırtpaǵa aylandırıw.
-        Tranzakciya qollanılǵan: qátelik bolsa barlıq ózgerisler biykar etiledi.
-        """
-        user_card = Card.objects.filter(user=request.user).first()
+        checkout_serializer = CheckoutSerializer(data=request.data)
+        checkout_serializer.is_valid(raise_exception=True)
         
-        if not user_card or not user_card.items.exists():
-            return Response({"error": "Sebetińiz bos"}, status=status.HTTP_400_BAD_REQUEST)
+        address = checkout_serializer.validated_data.get('address') or request.user.address
         
-        address = request.data.get('address') or request.user.address
         if not address:
-            return Response({"error": "Mánzil kórsetiliwi shárt"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "Mánzil kiritiliwi shárt yamasa profilińizde mánzil kórsetilgen bolıwı kerek."}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
-        with transaction.atomic():
-            total_sum = 0
-            order = Order.objects.create(user=request.user, total_price=0, address=address)
+        # 2. Sebeti bar ekenin tekseriw
+        user_card = Card.objects.filter(user=request.user).first()
+        if not user_card or not user_card.items.exists():
+            return Response({"error": "Sebetińiz bos. Buyırtpa beriw ushın dáslep ónim qosıń."}, status=status.HTTP_400_BAD_REQUEST)
 
-            for item in user_card.items.all():
-                product = Product.objects.select_for_update().get(id=item.product.id)
-
-                if product.stock < item.quantity:
-                    raise serializers.ValidationError(f"{product.name} qoymada jetkilikli emes")
-
-                price = product.discount_price or product.price
-                OrderItem.objects.create(
-                    order=order, product=product, 
-                    quantity=item.quantity, price=price
+        # 3. Buyırtpa jaratıw 
+        try:
+            with transaction.atomic():
+                # Buyırtpa ob'ektin jaratıw
+                order = Order.objects.create(
+                    user=request.user, 
+                    total_price=0, 
+                    address=address
                 )
                 
-                total_sum += price * item.quantity
-                product.stock -= item.quantity
-                product.save()
+                total_sum = 0
+                
+                # Sebet elementlerin aylanıp shıǵıw
+                for item in user_card.items.all():
+                    # select_for_update() — maǵlıwmatlar bazasında usı tovardı "block" qılıp turadı
+                    product = Product.objects.select_for_update().get(id=item.product.id)
 
-            order.total_price = total_sum
-            order.save()
-            user_card.items.all().delete()
+                    # Qoymada bar ekenin tekseriw
+                    if product.stock < item.quantity:
+                        raise serializers.ValidationError(
+                            f"Keshiresiz, '{product.name}' óniminen qoymada jetkilikli emes. Barı: {product.stock}"
+                        )
 
-        return Response(OrderSerializer(order).data, status=status.HTTP_201_CREATED)
+                    current_price = product.discount_price if product.discount_price else product.price
+                    
+                    # OrderItem jaratıw
+                    OrderItem.objects.create(
+                        order=order,
+                        product=product,
+                        quantity=item.quantity,
+                        price=current_price
+                    )
 
-    def create(self, request, *args, **kwargs):
-        """Standart create metodı jawılǵan, buyırtpa ushın checkout isletiliwi kerek."""
-        return Response({"error": "Buyırtpa ushın /checkout/ isletin"}, 
-                        status=status.HTTP_405_METHOD_NOT_ALLOWED)
-    
+                    # Esap-kitap hám stocktı jańalaw
+                    total_sum += current_price * item.quantity
+                    product.stock -= item.quantity
+                    product.save()
 
+                # Buyırtpa ulıwma bahasın saqlaw
+                order.total_price = total_sum
+                order.save()
+
+                # Sebeti tazalaw
+                user_card.items.all().delete()
+
+            # Juwaptı qaytarıw
+            return Response(OrderSerializer(order).data, status=status.HTTP_201_CREATED)
+
+        except serializers.ValidationError as e:
+            return Response({"error": e.detail}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({"error": f"Sistema qáteligi: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class ReviewViewSet(viewsets.ModelViewSet):
     queryset = Review.objects.all()

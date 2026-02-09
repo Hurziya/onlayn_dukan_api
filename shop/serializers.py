@@ -89,6 +89,10 @@ class CardSerializer(serializers.ModelSerializer):
             for i in items
         ])
         return total
+    
+class AddToCardSerializer(serializers.Serializer):
+    product_id = serializers.IntegerField(help_text="Ónimniń ID-si")
+    quantity = serializers.IntegerField(default=1, help_text="Sathı alınatuǵın muǵdar")
 
 
 class OrderItemSerializer(serializers.ModelSerializer):
@@ -117,6 +121,13 @@ class OrderSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         return super().create(validated_data)
+    
+
+class CheckoutSerializer(serializers.Serializer):
+    address = serializers.CharField(
+        required=False, 
+        help_text="Buyırtpa jetkerip beriletuǵın mánzil. Bos qalsa, profil mánzili alınadı."
+    )
     
 
 class ReviewSerializer(serializers.ModelSerializer):
