@@ -1,7 +1,9 @@
-
 from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.contrib.auth import get_user_model
+
+from django.db.models.signals import post_save
+from django.dispatch import receiver
 
 User = get_user_model()
 
@@ -121,3 +123,7 @@ class Review(models.Model):
     def __str__(self):
         return f"{self.user.phone_number} - {self.product.name} ({self.rating})"
     
+
+
+
+

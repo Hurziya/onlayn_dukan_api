@@ -8,8 +8,8 @@ class UserManager(BaseUserManager):
         if email:
             email = self.normalize_email(email)
         else:
-            email = None 
-            
+           email = None 
+           
         user = self.model(phone_number=phone_number, email=email, **extra_fields)
         user.set_password(password)
         user.save(using=self._db)

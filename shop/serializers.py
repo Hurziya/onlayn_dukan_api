@@ -122,13 +122,18 @@ class OrderSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         return super().create(validated_data)
     
-
 class CheckoutSerializer(serializers.Serializer):
     address = serializers.CharField(
         required=False, 
-        help_text="Buyırtpa jetkerip beriletuǵın mánzil. Bos qalsa, profil mánzili alınadı."
+        allow_blank=True, 
+        help_text="Buyırtpa jetkerip beriletuǵın mánzil. Bos bolsa, profil mánzili alınadı."
     )
-    
+    card_item_ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        allow_empty=False,
+        help_text="Sebettegi elementlerdiń ID-leri: [10, 12, 15]"
+    )
+   
 
 class ReviewSerializer(serializers.ModelSerializer):
     user_name = serializers.ReadOnlyField(source='user.first_name')

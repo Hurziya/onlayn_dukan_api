@@ -41,8 +41,7 @@ class CategoryViewSet(mixins.ListModelMixin,      # Tek GET /categories/ (Dizim)
                       mixins.CreateModelMixin,    # Tek POST /categories/ (Qosıw)
                       viewsets.GenericViewSet):   # Tiykarǵı klass
     """
-    Kategoriyalarda ID boyınsha hesh qanday metod joq.
-    Swagger-de tek GET (list) hám POST (create) qaladı.
+    Kategoriyalarda ID boyınsha hesh qanday metod joq
     """
     queryset = Category.objects.all().order_by('id') 
     serializer_class = CategorySerializer
@@ -51,7 +50,7 @@ class CategoryViewSet(mixins.ListModelMixin,      # Tek GET /categories/ (Dizim)
     search_fields = ['name']
 
     def get_queryset(self):
-        # Filtrlew logikası ózgermeydi
+        # Parent ID-si boyınsha filtrlew (misal: /categories/?parent=3)
         queryset = Category.objects.all().order_by('id')
         parent_id = self.request.query_params.get('parent')
         
@@ -80,7 +79,7 @@ class ProductViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     
     filterset_fields = {
-        'category': ['exact'],
+        'category': ['exact'], # Kategoriya boyınsha filtrlew (misal: /products/?category=5)
         'price': ['gte', 'lte'], 
     }
     search_fields = ['name', 'description']
@@ -136,6 +135,7 @@ class CardViewSet(viewsets.ModelViewSet):
         except Product.DoesNotExist:
             return Response({"error": "Ónim tabılmadı"}, status=status.HTTP_404_NOT_FOUND)
 
+        
         user_card, _ = Card.objects.get_or_create(user=request.user)
         item, created = CardItem.objects.get_or_create(card=user_card, product=product, defaults={'quantity': 0})
 
@@ -178,30 +178,23 @@ class OrderViewSet(viewsets.ModelViewSet):
     @extend_schema(
         request=CheckoutSerializer,
         responses={201: OrderSerializer},
-        description="Sebettegi tovarlardı buyırtpa retinde rásmiylestiriw (Checkout)."
+        description="Sebettegi tańlanǵan CardItem ID-lerin buyırtpaǵa aylandırıw."
     )
+
     @action(detail=False, methods=['post'], url_path='checkout')
     def checkout(self, request):
-        checkout_serializer = CheckoutSerializer(data=request.data)
-        checkout_serializer.is_valid(raise_exception=True)
+        serializer = CheckoutSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
         
-        address = checkout_serializer.validated_data.get('address') or request.user.address
-        
+        address = serializer.validated_data.get('address') or request.user.address
+        # ID-ler dizimin tuwrıdan-tuwrı alamız
+        card_item_ids = serializer.validated_data['card_item_ids']
+
         if not address:
-            return Response(
-                {"error": "Mánzil kiritiliwi shárt yamasa profilińizde mánzil kórsetilgen bolıwı kerek."}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({"error": "Mánzil kórsetiliwi shárt"}, status=400)
 
-        # 2. Sebeti bar ekenin tekseriw
-        user_card = Card.objects.filter(user=request.user).first()
-        if not user_card or not user_card.items.exists():
-            return Response({"error": "Sebetińiz bos. Buyırtpa beriw ushın dáslep ónim qosıń."}, status=status.HTTP_400_BAD_REQUEST)
-
-        # 3. Buyırtpa jaratıw 
         try:
             with transaction.atomic():
-                # Buyırtpa ob'ektin jaratıw
                 order = Order.objects.create(
                     user=request.user, 
                     total_price=0, 
@@ -210,51 +203,56 @@ class OrderViewSet(viewsets.ModelViewSet):
                 
                 total_sum = 0
                 
-                # Sebet elementlerin aylanıp shıǵıw
-                for item in user_card.items.all():
-                    # select_for_update() — maǵlıwmatlar bazasında usı tovardı "block" qılıp turadı
-                    product = Product.objects.select_for_update().get(id=item.product.id)
-
-                    # Qoymada bar ekenin tekseriw
-                    if product.stock < item.quantity:
-                        raise serializers.ValidationError(
-                            f"Keshiresiz, '{product.name}' óniminen qoymada jetkilikli emes. Barı: {product.stock}"
+                # ID-ler boyınsha sikl (loop)
+                for card_item_id in card_item_ids:
+                    try:
+                        card_item = CardItem.objects.select_related('product').get(
+                            id=card_item_id, 
+                            card__user=request.user
                         )
+                    except CardItem.DoesNotExist:
+                        raise serializers.ValidationError(f"ID-si {card_item_id} bolǵan sebet elementi tabılmadı.")
 
-                    current_price = product.discount_price if product.discount_price else product.price
+                    product = card_item.product
+                    qty = card_item.quantity
+
+                    if product.stock < qty:
+                        raise serializers.ValidationError(f"{product.name} qoymada jetkilikli emes")
+
+                    price = product.discount_price or product.price
                     
-                    # OrderItem jaratıw
                     OrderItem.objects.create(
                         order=order,
                         product=product,
-                        quantity=item.quantity,
-                        price=current_price
+                        quantity=qty,
+                        price=price
                     )
 
-                    # Esap-kitap hám stocktı jańalaw
-                    total_sum += current_price * item.quantity
-                    product.stock -= item.quantity
+                    total_sum += price * qty
+                    product.stock -= qty
                     product.save()
+                    card_item.delete()
 
-                # Buyırtpa ulıwma bahasın saqlaw
                 order.total_price = total_sum
                 order.save()
 
-                # Sebeti tazalaw
-                user_card.items.all().delete()
-
-            # Juwaptı qaytarıw
             return Response(OrderSerializer(order).data, status=status.HTTP_201_CREATED)
 
         except serializers.ValidationError as e:
-            return Response({"error": e.detail}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": e.detail}, status=400)
         except Exception as e:
-            return Response({"error": f"Sistema qáteligi: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"error": str(e)}, status=500)
 
 class ReviewViewSet(viewsets.ModelViewSet):
     queryset = Review.objects.all()
     serializer_class = ReviewSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly, IsAuthorOrReadOnly]
+
+    def get_queryset(self):
+        product_id = self.request.query_params.get('product_id', None)
+        if product_id:
+            return Review.objects.filter(product__id=product_id)
+        return Review.objects.all()
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
