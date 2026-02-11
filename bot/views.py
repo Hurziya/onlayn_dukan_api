@@ -120,7 +120,7 @@ class LoginWithCodeView(APIView):
                 'first_name': data.get('first_name', ''),
                 'last_name': data.get('last_name', ''),
                 'email': f"tg_{data['phone_number']}@dukan.uz", # Unikal email
-                'role': 'KLIENT' # Custom User modelińizdegi default rol
+                'role': 'KLIENT' 
             }
         )
         if not user.telegram_id:

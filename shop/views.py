@@ -8,7 +8,8 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import mixins, viewsets
 
 from .models import Category, Product, Card, CardItem, Order, OrderItem, Review
-from .serializers import (CardSerializer, ProductSerializer, OrderSerializer, ReviewSerializer, CategorySerializer, AddToCardSerializer, CheckoutSerializer)
+from .serializers import (CardSerializer, ProductSerializer, OrderSerializer, ReviewSerializer, 
+                          CategorySerializer, AddToCardSerializer, CheckoutSerializer)
   
 
 
