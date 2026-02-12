@@ -1,22 +1,24 @@
 from rest_framework.response import Response
 from .models import User
-from .serializers import UserSerializer
+from .serializers import UserSerializer, LogoutSerializer
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework_simplejwt.tokens import RefreshToken
+from drf_spectacular.utils import extend_schema, extend_schema_view
 
+@extend_schema_view(
+    manage_profile=extend_schema(tags=['Profile']),
+    logout=extend_schema(tags=['Auth']),
+)
 class UserViewSet(viewsets.ModelViewSet):
-    """
-    Paydalanıwshılardı basqarıw ushın ViewSet.
-    """
+    """Paydalanıwshılar menedjmenti hám profil basqarıw ushın viewset"""
+    
     queryset = User.objects.all()
     serializer_class = UserSerializer
 
     def get_queryset(self):
-        # Eger soraw jiberiwshi dizimnen ótpegen bolsa (create waqtında)
         if self.request.user.is_anonymous:
             return User.objects.none()
-        # Admin barlıǵın kóredi, ápiwayı paydalanıwshı tek ózin
         if self.request.user.is_staff:
             return User.objects.all()
         return User.objects.filter(id=self.request.user.id)
@@ -28,7 +30,18 @@ class UserViewSet(viewsets.ModelViewSet):
             return [permissions.IsAdminUser()]
         return [permissions.IsAuthenticated()]
 
-    @action(detail=False, methods=['get','patch'], url_path='me')
+    @extend_schema(
+        methods=['GET'],
+        responses={200: UserSerializer},
+        description="Login bolǵan paydalanıwshınıń óz profilin kóriwi"
+    )
+    @extend_schema(
+        methods=['PATCH'],
+        request=UserSerializer,
+        responses={200: UserSerializer},
+        description="Profil maǵlıwmatların jańalaw (tek kerekli maydanlardı jiberseńiz jetkilikli)"
+    )
+    @action(detail=False, methods=['get', 'patch'], url_path='me')
     def manage_profile(self, request):
         user = request.user
         if request.method == 'GET':
@@ -41,13 +54,18 @@ class UserViewSet(viewsets.ModelViewSet):
         serializer.save()
         return Response(serializer.data)
     
+    @extend_schema(
+        request=LogoutSerializer,
+        responses={200: dict},
+        description="Sistemadan shıǵıw (Refresh tokendi biykar etiw)"
+    )
     @action(detail=False, methods=['post'])
     def logout(self, request):
+        serializer = LogoutSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
         try:
-            refresh_token = request.data.get("refresh")
-            if not refresh_token:
-                return Response({"error": "Refresh token kiritilmegen"}, status=status.HTTP_400_BAD_REQUEST)
-            
+            refresh_token = serializer.validated_data["refresh"]
             token = RefreshToken(refresh_token)
             token.blacklist() 
             return Response({"message": "Siz sistemadan tabıslı shıqtıńız"}, status=status.HTTP_200_OK)

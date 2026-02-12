@@ -5,20 +5,17 @@ class UserManager(BaseUserManager):
     def create_user(self, phone_number, email=None, password=None, **extra_fields):
         if not phone_number:
             raise ValueError('Telefon nomer jazılıwı shárt')
-        if email:
-            email = self.normalize_email(email)
-        else:
-           email = None 
-           
+        
+        
         user = self.model(phone_number=phone_number, email=email, **extra_fields)
         user.set_password(password)
         user.save(using=self._db)
         return user
 
-    def create_superuser(self, phone_number, email, password=None, **extra_fields):
+    def create_superuser(self, phone_number, password=None, **extra_fields):
         extra_fields.setdefault('is_staff', True)
         extra_fields.setdefault('is_superuser', True)
-        return self.create_user(phone_number, email, password, **extra_fields)
+        return self.create_user(phone_number=phone_number, password=password, **extra_fields)
 
 class User(AbstractUser):
 
@@ -34,6 +31,9 @@ class User(AbstractUser):
     email = models.EmailField(unique=True, null=True, blank=True)
 
     USERNAME_FIELD = 'phone_number'
-    REQUIRED_FIELDS = ['email', 'first_name', 'last_name']
+    REQUIRED_FIELDS = ['first_name', 'last_name']
     
     objects = UserManager()
+
+    def __str__(self):  
+        return self.phone_number

@@ -16,15 +16,11 @@ from decouple import config
 from datetime import timedelta
 
 
-
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 ALLOWED_HOSTS = [
-    '.ngrok-free.dev', 
-    '.ngrok-free.app', 
-    '127.0.0.1', 
-    'localhost'
+    os.environ.get('ALLOWED_HOSTS').split(',')
 ]
 
 SECRET_KEY = config('SECRET_KEY')
@@ -163,6 +159,7 @@ SPECTACULAR_SETTINGS = {
     'DESCRIPTION': 'Proekt ushın API hújjetlemesi',
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
+    'SCHEMA_PATH_PREFIX': r'/api/',
 }
 
 SIMPLE_JWT = {
@@ -184,7 +181,6 @@ TELEGRAM_BOT_TOKEN = config('TELEGRAM_BOT_TOKEN')
 TELEGRAM_WEBHOOK_URL = config('TELEGRAM_WEBHOOK_URL')
 TELEGRAM_SECRET_TOKEN = config('TELEGRAM_SECRET_TOKEN', default=None)
 
-# Bot views hám apps islep ketiwi ushın aliaslar (qosımsha atamalar)
 TG_TOKEN = TELEGRAM_BOT_TOKEN
 TG_SECRET = TELEGRAM_SECRET_TOKEN
 
@@ -193,11 +189,3 @@ CSRF_TRUSTED_ORIGINS = [
     'https://*.ngrok-free.app', 
 ]
 
-
-
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'sandbox.smtp.mailtrap.io'
-EMAIL_PORT = 2525
-EMAIL_HOST_USER = config('EMAIL_USER')
-EMAIL_HOST_PASSWORD = config('EMAIL_PASS')
-EMAIL_USE_TLS = True

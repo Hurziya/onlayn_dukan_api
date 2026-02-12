@@ -1,144 +1,77 @@
 from rest_framework import serializers
 from .models import Category, Product, Card, CardItem, Order, OrderItem, Review
 
-
-
-class SubCategorySerializer(serializers.ModelSerializer):
-    """
-    Kategoriyalardıń ishki (sub-category) dizimin kórsetiw ushın kómekshi serializer.
-    """
-    class Meta:
-        model = Category
-        fields = ['id', 'name', 'slug']
-
-
 class CategorySerializer(serializers.ModelSerializer):
-    """
-    Tiykarǵı kategoriyalar hám olardıń ishindegi barlıq ishki kategoriyalardı 
-    rekursiv túrde kórsetiwshi serializer.
-    """
-    children = SubCategorySerializer(many=True, read_only=True)
+    children = serializers.SerializerMethodField()
 
     class Meta:
         model = Category
         fields = ['id', 'name', 'slug', 'children']
 
+    def get_children(self, obj):
+        return CategorySerializer(obj.children.all(), many=True).data if obj.children.exists() else []
 
 class ProductSerializer(serializers.ModelSerializer):
-    """
-    Ónimlerdiń tolıq maǵlıwmatın kórsetiwshi serializer. 
-    Shegirme bahaların esapqa alǵan halda aqırǵı 'final_price' mánisin qaytaradı.
-    """
     category_name = serializers.ReadOnlyField(source='category.name')
-    final_price = serializers.SerializerMethodField()
-
-
-    def validate(self, data):
-        if data.get('discount_price') and data.get('discount_price') >= data.get('price'):
-            raise serializers.ValidationError("Shegirme bahası tiykarǵı bahadan kishi bolıwı kerek")
-        return data
+    final_price = serializers.ReadOnlyField()
 
     class Meta:
         model = Product
-        fields = [
-            'id', 'category', 'category_name', 'name', 'slug', 
-            'description', 'price', 'discount_price', 'final_price', 
-            'image', 'stock', 'is_active', 'created_at'
-        ]
-
-    def get_final_price(self, obj):
-        return obj.discount_price if obj.discount_price else obj.price
-
+        fields = ['id', 'category', 'category_name', 'name', 'slug', 'price', 'discount_price', 'final_price', 'stock', 'image']
 
 class CardItemSerializer(serializers.ModelSerializer):
-    """
-    Sebet ishindegi hárbir elementti basqarıw ushın kerek. 
-    Hárbir elementtiń (ónim * sanı) ulıwma bahasınıń esaplaydı.
-    """
     product = ProductSerializer(read_only=True)
-    product_id = serializers.PrimaryKeyRelatedField(
-        queryset=Product.objects.all(), source='product', write_only=True
-    )
     item_total_price = serializers.SerializerMethodField()
 
     class Meta:
         model = CardItem
-        fields = ['id', 'product', 'product_id', 'quantity', 'item_total_price']
+        fields = ['id', 'product', 'quantity', 'item_total_price']
 
     def get_item_total_price(self, obj):
-        price = obj.product.discount_price if obj.product.discount_price else obj.product.price
-        return obj.quantity * price
-
+        return obj.quantity * obj.product.final_price
 
 class CardSerializer(serializers.ModelSerializer):
-    """
-    Paydalanıwshınıń pútin sebetin kórsetiwshi serializer. 
-    Sebet ishindegi barlıq ónimlerdiń ulıwma summasın (total_cart_price) esaplaydı.
-    """
     items = CardItemSerializer(many=True, read_only=True)
     total_cart_price = serializers.SerializerMethodField()
 
     class Meta:
         model = Card
-        fields = ['id', 'user', 'items', 'total_cart_price']
+        fields = ['id', 'items', 'total_cart_price']
 
     def get_total_cart_price(self, obj):
-        items = obj.items.all()
-        total = sum([
-            (i.product.discount_price if i.product.discount_price else i.product.price) * i.quantity 
-            for i in items
-        ])
-        return total
-    
+        return sum(item.quantity * item.product.final_price for item in obj.items.all())
+
 class AddToCardSerializer(serializers.Serializer):
-    product_id = serializers.IntegerField(help_text="Ónimniń ID-si")
-    quantity = serializers.IntegerField(default=1, help_text="Sathı alınatuǵın muǵdar")
+    product_id = serializers.IntegerField()
+    quantity = serializers.IntegerField(default=1)
+
+
+class CheckoutSerializer(serializers.Serializer):
+    address = serializers.CharField(required=True)
+    card_item_ids = serializers.ListField(child=serializers.IntegerField(), allow_empty=False)
 
 
 class OrderItemSerializer(serializers.ModelSerializer):
-    """
-    Buyırtpa berilgen waqıttaǵı ónimler dizimi hám olardıń sol waqıttaǵı bahasın kórsetiwshi serializer.
-    """
     product_name = serializers.ReadOnlyField(source='product.name')
 
     class Meta:
         model = OrderItem
-        fields = ['id', 'product_name', 'price', 'quantity']
+        fields = ['id', 'product_name', 'quantity', 'price']
 
 
 class OrderSerializer(serializers.ModelSerializer):
-    """
-    Buyırtpalardı jaratıw hám kórsetiw ushın serializer. 
-    Buyırtpa statusı hám ulıwma bahasın qáwipsizlik ushın tek oqıw (read_only) rejiminde kórsetedi.
-    """
     items = OrderItemSerializer(many=True, read_only=True)
-    user_phone = serializers.ReadOnlyField(source='user.phone_number')
 
     class Meta:
         model = Order
-        fields = ['id', 'user_phone', 'total_price', 'status', 'address', 'items', 'created_at']
-        read_only_fields = ['total_price', 'status']
+        fields = ['id', 'total_price', 'status', 'address', 'items', 'created_at']
 
-    def create(self, validated_data):
-        return super().create(validated_data)
-    
-class CheckoutSerializer(serializers.Serializer):
-    address = serializers.CharField(
-        required=False, 
-        allow_blank=True, 
-        help_text="Buyırtpa jetkerip beriletuǵın mánzil. Bos bolsa, profil mánzili alınadı."
-    )
-    card_item_ids = serializers.ListField(
-        child=serializers.IntegerField(),
-        allow_empty=False,
-        help_text="Sebettegi elementlerdiń ID-leri: [10, 12, 15]"
-    )
-   
+    def get_items(self, obj):
+        return [{"product": i.product.name, "qty": i.quantity, "price": i.price} for i in obj.items.all()]
+
 
 class ReviewSerializer(serializers.ModelSerializer):
-    user_name = serializers.ReadOnlyField(source='user.first_name')
-
     class Meta:
         model = Review
-        fields = ['id', 'user_name', 'rating', 'comment', 'created_at']
-        # comment avtomat túrde optional (májburiy emes) boladı
+        fields = ['id', 'product', 'rating', 'comment', 'created_at']
+        read_only_fields = ['user']

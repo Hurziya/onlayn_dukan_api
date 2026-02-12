@@ -1,5 +1,8 @@
 from django.apps import AppConfig
 import sys
+import requests
+from django.conf import settings
+        
 
 class BotConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
@@ -10,9 +13,6 @@ class BotConfig(AppConfig):
             self.set_telegram_webhook()
 
     def set_telegram_webhook(self):
-        import requests
-        from django.conf import settings
-        
         token = settings.TELEGRAM_BOT_TOKEN
         webhook_url = settings.TELEGRAM_WEBHOOK_URL
         
