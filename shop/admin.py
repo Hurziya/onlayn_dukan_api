@@ -27,7 +27,7 @@ class ProductAdmin(admin.ModelAdmin):
     list_filter = ('category', 'is_active', 'created_at')
     search_fields = ('name', 'description')
     prepopulated_fields = {'slug': ('name',)}
-    list_editable = ('price', 'stock', 'is_active') # Adminniń ózinde tez ózgertiw ushın
+    list_editable = ('price', 'stock', 'is_active') 
 
     def get_avg_rating(self, obj):
         result = obj.reviews.aggregate(Avg('rating'))['rating__avg']

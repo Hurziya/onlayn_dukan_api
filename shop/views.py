@@ -1,41 +1,97 @@
 from django.db import transaction
 from django.db.models import F
-from rest_framework import viewsets, permissions, mixins, serializers
+from rest_framework import viewsets, permissions, mixins, serializers, filters, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from drf_spectacular.utils import extend_schema, extend_schema_view
+from django_filters.rest_framework import DjangoFilterBackend
+from django.shortcuts import get_object_or_404
+from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter
 
 from .models import Category, Product, Card, CardItem, Order, OrderItem, Review
-# OrderItemSerializer-di importlarǵa qosıń (serializers.py-da jazǵan bolsańız)
 from .serializers import (
     CategorySerializer, ProductSerializer, CardSerializer, 
     AddToCardSerializer, CheckoutSerializer, OrderSerializer, 
     ReviewSerializer
 )
 
-# --- CATEGORY VIEWSET ---
+
 @extend_schema_view(
     list=extend_schema(tags=['Kategoriya'], summary="Barlıq bas kategoriyalar"),
 )
-class CategoryViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
-    queryset = Category.objects.filter(parent__isnull=True)
+class CategoryViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
     serializer_class = CategorySerializer
+    filter_backends = [filters.SearchFilter, DjangoFilterBackend]
+    search_fields = ['name', 'slug']
+
+    def get_queryset(self):
+        base_query = Category.objects.all() if self.request.user.is_staff else Category.objects.filter(is_active=True)
+        if self.action == 'list':
+            return base_query.filter(parent__isnull=True)
+        return base_query
+
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        category_ids = list(instance.children.values_list('id', flat=True)) + [instance.id]
+        
+        products = Product.objects.filter(category_id__in=category_ids, is_active=True)
+        
+        category_data = self.get_serializer(instance).data
+        product_data = ProductSerializer(products, many=True, context={'request': request}).data
+        
+        return Response({
+            "category": category_data,
+            "products": product_data
+        })
 
 
-# --- PRODUCT VIEWSET ---
+@extend_schema_view(
+        list=extend_schema(tags=['Ónimler'],summary="Ónimler dizimi hám filtr",
+        parameters=[OpenApiParameter(
+            name='category',
+            description='Kategoriya ID boyınsha filtr (ishkilerin qosıp)',
+            required=False,
+            type=int
+            ),]
+        ),
+        retrieve=extend_schema(tags=['Ónimler'], summary="Ónim haqqında tolıq maǵlıwmat"),
+        )
+class ProductViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = ProductSerializer
+    permission_classes = [permissions.AllowAny]
+    filter_backends = [
+    filters.SearchFilter,
+    DjangoFilterBackend,
+    filters.OrderingFilter,
+    ]
+    search_fields = ["name"]
+    ordering_fields = ["price", "name"]
+    ordering = ["-price"]
+    http_method_names = ['get']
+
+
+
 @extend_schema_view(
     list=extend_schema(tags=['Ónimler'], summary="Ónimler dizimi hám filtr"),
     retrieve=extend_schema(tags=['Ónimler'], summary="Ónim haqqında tolıq maǵlıwmat"),
 )
 class ProductViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Product.objects.filter(is_active=True)
+    queryset = Product.objects.filter(is_active=True).select_related("category")
     serializer_class = ProductSerializer
+    permission_classes = [permissions.AllowAny]
+    filter_backends = [
+        filters.SearchFilter,
+        DjangoFilterBackend,
+        filters.OrderingFilter,
+    ]
+    search_fields = ["name"]
+    ordering_fields = ["price", "name",]
+    ordering = ["-price"]
+    http_method_names = ['get']
 
-
-# --- CARD VIEWSET ---
 class CardViewSet(viewsets.GenericViewSet):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = CardSerializer
+    pagination_class = None
 
     @extend_schema(tags=['Sebet'], summary="Sebetti kóriw", responses=CardSerializer)
     @action(detail=False, methods=['get'])
@@ -48,6 +104,7 @@ class CardViewSet(viewsets.GenericViewSet):
     def add(self, request):
         ser = AddToCardSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
+        # sebetke qosıw
         with transaction.atomic():
             prod = Product.objects.select_for_update().get(id=ser.validated_data['product_id'])
             cart, _ = Card.objects.get_or_create(user=request.user)
@@ -57,44 +114,73 @@ class CardViewSet(viewsets.GenericViewSet):
         return Response({"status": "Qosıldı"}, status=201)
 
 
-# --- ORDER VIEWSET ---
+
 class OrderViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = OrderSerializer
-    queryset = Order.objects.none()
 
     def get_queryset(self):
-        
         if getattr(self, "swagger_fake_view", False):
             return Order.objects.none()
         return Order.objects.filter(user=self.request.user).prefetch_related('items__product')
 
-    @extend_schema(tags=['Buyırtpa'], summary="Checkout (Buyırtpa beriw)", request=CheckoutSerializer)
+    @extend_schema(tags=['Zakazlar'], summary="Zakaz qılıw", request=CheckoutSerializer, responses={201: OrderSerializer})
     @action(detail=False, methods=['post'])
     def checkout(self, request):
+        user = request.user
         ser = CheckoutSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
-        with transaction.atomic():
-            items = CardItem.objects.filter(id__in=ser.validated_data['card_item_ids'], card__user=request.user)
-            if not items: return Response({"error": "Bos"}, status=400)
-            
-            order = Order.objects.create(user=request.user, total_price=0, address=ser.validated_data['address'])
-            total = 0
-            for i in items:
-                price = i.product.final_price
-                total += price * i.quantity
-                OrderItem.objects.create(order=order, product=i.product, price=price, quantity=i.quantity)
-                Product.objects.filter(id=i.product.id).update(stock=F('stock') - i.quantity)
-            
-            order.total_price = total
-            order.save()
-            items.delete()
         
-        # OrderItemSerializer-di OrderSerializer avtomat paydalanadı
-        return Response(OrderSerializer(order).data)
+        address = ser.validated_data.get("address")
+        card_item_ids = ser.validated_data.get("card_item_ids") 
 
+        cart = get_object_or_404(Card, user=user)
 
-# --- PERMISSIONS ---
+        with transaction.atomic():
+            if card_item_ids:
+                items = cart.items.select_related('product').select_for_update().filter(id__in=card_item_ids) 
+                
+                if items.count() != len(card_item_ids):
+                    return Response(
+                        {"error": "Ayırım ónimler tabılmadı yamasa sizge tiyisli emes"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            else:
+                items = cart.items.select_related('product').select_for_update().all()
+
+            if not items.exists():
+                return Response({"error": "Sebet bos!"}, status=status.HTTP_400_BAD_REQUEST)
+
+            total_price = 0
+            for i in items:
+                if i.product.stock < i.quantity:
+                    return Response(
+                        {"error": f"{i.product.name} bazada jetkiliksiz!"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                total_price += i.product.final_price * i.quantity
+
+            # Zakaz jaratıw
+            order = Order.objects.create(
+                user=user, 
+                total_price=total_price, 
+                address=address,
+                status="PENDING" 
+            )
+            for i in items:
+                OrderItem.objects.create(
+                    order=order,
+                    product=i.product,
+                    quantity=i.quantity,
+                    price=i.product.final_price
+                )
+            # Sebettegi ónimderdi azaytw
+                Product.objects.filter(id=i.product.id).update(stock=F('stock') - i.quantity)
+
+            items.delete()
+
+        return Response(OrderSerializer(order).data, status=status.HTTP_201_CREATED)
+
 class IsAuthorOrReadOnly(permissions.BasePermission):
     def has_object_permission(self, request, view, obj):
         if request.method in permissions.SAFE_METHODS:
@@ -102,7 +188,6 @@ class IsAuthorOrReadOnly(permissions.BasePermission):
         return obj.user == request.user
 
 
-# --- REVIEW VIEWSET ---
 @extend_schema_view(
     create=extend_schema(
         tags=['Pikirler'], 
@@ -121,8 +206,7 @@ class ReviewViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         user = self.request.user
         product = serializer.validated_data.get('product')
-
-        has_purchased = OrderItem.objects.filter(
+        has_purchased = OrderItem.objects.filter( 
             order__user=user, 
             product=product, 
             order__status__in=['PAID', 'SHIPPED']

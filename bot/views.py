@@ -14,7 +14,6 @@ from drf_spectacular.utils import extend_schema, extend_schema_view
 
 User = get_user_model()
 
-# --- Serializers ---
 class LoginCodeSerializer(serializers.Serializer):
     code = serializers.CharField(
         max_length=6, 
@@ -22,7 +21,6 @@ class LoginCodeSerializer(serializers.Serializer):
         help_text="Telegramnan kelgen 6 sanlı tastıyqlaw kodı"
     )
 
-# --- Views ---
 
 @method_decorator(csrf_exempt, name='dispatch')
 @extend_schema(exclude=True)
@@ -101,6 +99,7 @@ class TelegramWebhookView(APIView):
     post=extend_schema(
         tags=['Auth'],
         summary="Kod arqalı login",
+        request=LoginCodeSerializer,
         description="Telegram bot jibergen 6 sanlı kod arqalı Token (JWT) alıw."
     )
 )
@@ -151,4 +150,4 @@ class LoginWithCodeView(APIView):
                 "first_name": user.first_name,
                 "is_new": created
             }
-        }, status=status.HTTP_200_OK)
+        }, status=status.HTTP_200_OK)   

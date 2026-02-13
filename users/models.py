@@ -28,7 +28,6 @@ class User(AbstractUser):
     phone_number = models.CharField(max_length=15, unique=True)
     address = models.TextField(blank=True, null=True)
     telegram_id = models.BigIntegerField(unique=True, null=True, blank=True)
-    email = models.EmailField(unique=True, null=True, blank=True)
 
     USERNAME_FIELD = 'phone_number'
     REQUIRED_FIELDS = ['first_name', 'last_name']

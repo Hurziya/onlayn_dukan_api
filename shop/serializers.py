@@ -48,8 +48,10 @@ class AddToCardSerializer(serializers.Serializer):
 
 class CheckoutSerializer(serializers.Serializer):
     address = serializers.CharField(required=True)
-    card_item_ids = serializers.ListField(child=serializers.IntegerField(), allow_empty=False)
-
+    card_item_ids = serializers.ListField(
+        child=serializers.IntegerField(), 
+        allow_empty=False
+    )
 
 class OrderItemSerializer(serializers.ModelSerializer):
     product_name = serializers.ReadOnlyField(source='product.name')
