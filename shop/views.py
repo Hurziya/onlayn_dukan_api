@@ -24,7 +24,7 @@ class CategoryViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets
     search_fields = ['name', 'slug']
 
     def get_queryset(self):
-        base_query = Category.objects.all() if self.request.user.is_staff else Category.objects.filter(is_active=True)
+        base_query = Category.objects.all() 
         if self.action == 'list':
             return base_query.filter(parent__isnull=True)
         return base_query
