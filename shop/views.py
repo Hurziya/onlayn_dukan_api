@@ -6,14 +6,17 @@ from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter
-
+from rest_framework.pagination import PageNumberPagination
 from .models import Category, Product, Card, CardItem, Order, OrderItem, Review
 from .serializers import (
     CategorySerializer, ProductSerializer, CardSerializer, 
     AddToCardSerializer, CheckoutSerializer, OrderSerializer, 
     ReviewSerializer
 )
-
+class StandardResultsSetPagination(PageNumberPagination):
+    page_size = 10                 
+    page_size_query_param = 'page_size' 
+    max_page_size = 100
 
 @extend_schema_view(
     list=extend_schema(tags=['Kategoriya'], summary="Barlıq bas kategoriyalar"),
@@ -29,17 +32,26 @@ class CategoryViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets
             return base_query.filter(parent__isnull=True)
         return base_query
 
+    
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()
         category_ids = list(instance.children.values_list('id', flat=True)) + [instance.id]
-        
         products = Product.objects.filter(category_id__in=category_ids, is_active=True)
         
-        category_data = self.get_serializer(instance).data
-        product_data = ProductSerializer(products, many=True, context={'request': request}).data
+        paginator = StandardResultsSetPagination()
+        page = paginator.paginate_queryset(products, request)
         
+        if page is not None:
+            product_serializer = ProductSerializer(page, many=True, context={'request': request})
+            category_data = self.get_serializer(instance).data
+            return paginator.get_paginated_response({
+                "category": category_data,
+                "products": product_serializer.data
+            })
+
+        product_data = ProductSerializer(products, many=True, context={'request': request}).data
         return Response({
-            "category": category_data,
+            "category": self.get_serializer(instance).data,
             "products": product_data
         })
 
@@ -63,6 +75,7 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
     DjangoFilterBackend,
     filters.OrderingFilter,
     ]
+    pagination_class = StandardResultsSetPagination
     search_fields = ["name"]
     ordering_fields = ["price", "name"]
     ordering = ["-price"]
@@ -118,6 +131,7 @@ class CardViewSet(viewsets.GenericViewSet):
 class OrderViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = OrderSerializer
+    pagination_class = StandardResultsSetPagination
 
     def get_queryset(self):
         if getattr(self, "swagger_fake_view", False):
