@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Category, Product, Card, CardItem, Order, OrderItem, Review
+from .models import Category, Product, Cart, CartItem, Order, OrderItem, Review
 
 class CategorySerializer(serializers.ModelSerializer):
     children = serializers.SerializerMethodField()
@@ -19,29 +19,29 @@ class ProductSerializer(serializers.ModelSerializer):
         model = Product
         fields = ['id', 'category', 'category_name', 'name', 'slug', 'price', 'discount_price', 'final_price', 'stock', 'image']
 
-class CardItemSerializer(serializers.ModelSerializer):
+class CartItemSerializer(serializers.ModelSerializer):
     product = ProductSerializer(read_only=True)
     item_total_price = serializers.SerializerMethodField()
 
     class Meta:
-        model = CardItem
+        model = CartItem
         fields = ['id', 'product', 'quantity', 'item_total_price']
 
     def get_item_total_price(self, obj):
         return obj.quantity * obj.product.final_price
 
-class CardSerializer(serializers.ModelSerializer):
-    items = CardItemSerializer(many=True, read_only=True)
+class CartSerializer(serializers.ModelSerializer):
+    items = CartItemSerializer(many=True, read_only=True)
     total_cart_price = serializers.SerializerMethodField()
 
     class Meta:
-        model = Card
+        model = Cart
         fields = ['id', 'items', 'total_cart_price']
 
     def get_total_cart_price(self, obj):
         return sum(item.quantity * item.product.final_price for item in obj.items.all())
 
-class AddToCardSerializer(serializers.Serializer):
+class AddToCartSerializer(serializers.Serializer):
     product_id = serializers.IntegerField()
     quantity = serializers.IntegerField(default=1)
 

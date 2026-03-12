@@ -7,10 +7,10 @@ from django_filters.rest_framework import DjangoFilterBackend
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter
 from rest_framework.pagination import PageNumberPagination
-from .models import Category, Product, Card, CardItem, Order, OrderItem, Review
+from .models import Category, Product, Cart, CartItem, Order, OrderItem, Review
 from .serializers import (
-    CategorySerializer, ProductSerializer, CardSerializer, 
-    AddToCardSerializer, CheckoutSerializer, OrderSerializer, 
+    CategorySerializer, ProductSerializer, CartSerializer, 
+    AddToCartSerializer, CheckoutSerializer, OrderSerializer, 
     ReviewSerializer
 )
 class StandardResultsSetPagination(PageNumberPagination):
@@ -101,27 +101,27 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
     ordering = ["-price"]
     http_method_names = ['get']
 
-class CardViewSet(viewsets.GenericViewSet):
+class CartViewSet(viewsets.GenericViewSet):
     permission_classes = [permissions.IsAuthenticated]
-    serializer_class = CardSerializer
+    serializer_class = CartSerializer
     pagination_class = None
 
-    @extend_schema(tags=['Sebet'], summary="Sebetti kóriw", responses=CardSerializer)
+    @extend_schema(tags=['Sebet'], summary="Sebetti kóriw", responses=CartSerializer)
     @action(detail=False, methods=['get'])
-    def my_card(self, request):
-        card, _ = Card.objects.get_or_create(user=request.user)
-        return Response(CardSerializer(card).data)
-
-    @extend_schema(tags=['Sebet'], summary="Sebetke qosıw", request=AddToCardSerializer)
+    def my_cart(self, request):
+        cart, _ = Cart.objects.get_or_create(user=request.user)
+        return Response(CartSerializer(cart).data)
+    
+    @extend_schema(tags=['Sebet'], summary="Sebetke qosıw", request=AddToCartSerializer)
     @action(detail=False, methods=['post'])
     def add(self, request):
-        ser = AddToCardSerializer(data=request.data)
+        ser = AddToCartSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         # sebetke qosıw
         with transaction.atomic():
             prod = Product.objects.select_for_update().get(id=ser.validated_data['product_id'])
-            cart, _ = Card.objects.get_or_create(user=request.user)
-            item, _ = CardItem.objects.get_or_create(card=cart, product=prod)
+            cart, _ = Cart.objects.get_or_create(user=request.user)
+            item, _ = CartItem.objects.get_or_create(cart=cart, product=prod)
             item.quantity = F('quantity') + ser.validated_data['quantity']
             item.save()
         return Response({"status": "Qosıldı"}, status=201)
@@ -148,7 +148,7 @@ class OrderViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
         address = ser.validated_data.get("address")
         card_item_ids = ser.validated_data.get("card_item_ids") 
 
-        cart = get_object_or_404(Card, user=user)
+        cart = get_object_or_404(Cart, user=user)
 
         with transaction.atomic():
             if card_item_ids:

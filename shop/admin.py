@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Category, Product, Order, OrderItem, Card, CardItem, Review
+from .models import Category, Product, Order, OrderItem, Cart, CartItem, Review
 from django.db.models import Avg
 
 
@@ -8,8 +8,8 @@ class OrderItemInline(admin.TabularInline):
     extra = 0 
     readonly_fields = ('price',)
 
-class CardItemInline(admin.TabularInline):
-    model = CardItem
+class CartItemInline(admin.TabularInline):
+    model = CartItem
     extra = 1
 
 
@@ -44,12 +44,11 @@ class OrderAdmin(admin.ModelAdmin):
     readonly_fields = ('created_at',)
 
 
-@admin.register(Card)
-class CardAdmin(admin.ModelAdmin):
+@admin.register(Cart)
+class CartAdmin(admin.ModelAdmin):
     list_display = ('user', 'get_items_count')
     search_fields = ('user__phone_number',)
-    inlines = [CardItemInline] # Sebet ishindegi ónimlerdi kórsetedi
-
+    inlines = [CartItemInline] # Sebet ishindegi ónimlerdi kórsetedi
     def get_items_count(self, obj):
         return obj.items.count()
     get_items_count.short_description = 'Ónimler sanı'
@@ -67,6 +66,6 @@ class OrderItemAdmin(admin.ModelAdmin):
     list_display = ('order', 'product', 'quantity', 'price')
 
 
-@admin.register(CardItem)
-class CardItemAdmin(admin.ModelAdmin):
-    list_display = ('card', 'product', 'quantity')
+@admin.register(CartItem)
+class CartItemAdmin(admin.ModelAdmin):
+    list_display = ('cart', 'product', 'quantity')

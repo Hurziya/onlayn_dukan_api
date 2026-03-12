@@ -34,11 +34,11 @@ class Product(models.Model):
     def final_price(self):
         return self.discount_price if self.discount_price else self.price
 
-class Card(models.Model):
+class Cart(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='cart')
 
-class CardItem(models.Model):
-    card = models.ForeignKey(Card, on_delete=models.CASCADE, related_name='items')
+class CartItem(models.Model):
+    cart = models.ForeignKey(Cart, on_delete=models.CASCADE, related_name='items')
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
     quantity = models.PositiveIntegerField(default=1)
 

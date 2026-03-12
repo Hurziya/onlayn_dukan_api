@@ -39,13 +39,11 @@ class UserViewSet(viewsets.ModelViewSet):
             return User.objects.all()
         return User.objects.filter(id=self.request.user.id)
 
-    # Registratsiya procesin customizatsiya qılamız
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
         
-        # Registratsiyadan soń birden token jaratıw
         refresh = RefreshToken.for_user(user)
         
         return Response({

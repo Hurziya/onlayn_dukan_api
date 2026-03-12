@@ -2,12 +2,12 @@ from django.db import models
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 
 class UserManager(BaseUserManager):
-    def create_user(self, phone_number, email=None, password=None, **extra_fields):
+    def create_user(self, phone_number, password=None, **extra_fields):
         if not phone_number:
             raise ValueError('Telefon nomer jazılıwı shárt')
         
         
-        user = self.model(phone_number=phone_number, email=email, **extra_fields)
+        user = self.model(phone_number=phone_number, **extra_fields)
         user.set_password(password)
         user.save(using=self._db)
         return user
